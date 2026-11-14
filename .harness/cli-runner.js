@@ -64,15 +64,21 @@ function checkGeminiAuthStatus() {
   const info = getGeminiSettingsInfo();
   const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
 
+  if (hasApiKey) {
+    return {
+      signedIn: true,
+      warning: false,
+      detail: info.selectedType === 'oauth-personal'
+        ? 'GEMINI_API_KEY 활성 (격리 프로필 · gemini-3.5-flash-lite 네이티브 실행 준비됨)'
+        : 'GEMINI_API_KEY 환경변수 설정됨 (gemini-3.5-flash-lite)',
+    };
+  }
   if (info.selectedType === 'oauth-personal') {
     return {
-      signedIn: Boolean(info.activeAccount || info.hasRefreshToken || hasApiKey),
+      signedIn: Boolean(info.activeAccount || info.hasRefreshToken),
       warning: true,
       detail: 'Google OAuth (oauth-personal / Gemini CLI 0.40+ 개인 무료 티어 제한 가능 — GEMINI_API_KEY 또는 Codex/OpenCode 브릿지 지원)',
     };
-  }
-  if (hasApiKey) {
-    return { signedIn: true, warning: false, detail: 'GEMINI_API_KEY 환경변수 설정됨' };
   }
   if (info.activeAccount) {
     return { signedIn: true, warning: false, detail: `Google 계정 (${info.activeAccount})` };
@@ -321,12 +327,20 @@ function buildCliInvocation(engine, providerCfg, workspaceDir, bridgeMode = fals
 
   if (lower.includes('gemini')) {
     const baseArgs = extraFlags.length
-      ? extraFlags
-      : ['-p', 'Read the harness constitution, SKILL.md, and task in stdin carefully. Perform the work directly in the workspace and output SUMMARY, VERDICT (PASS or REJECT), CHANGED_FILES, and DETAILS.', '--yolo', '--skip-trust'];
+      ? [...extraFlags]
+      : ['-m', 'gemini-3.5-flash-lite', '-p', 'Read the harness constitution, SKILL.md, and task in stdin carefully. Perform the work directly in the workspace and output SUMMARY, VERDICT (PASS or REJECT), CHANGED_FILES, and DETAILS.', '--yolo', '--skip-trust'];
+    if (!baseArgs.includes('-m') && !baseArgs.includes('--model')) {
+      baseArgs.unshift('-m', 'gemini-3.5-flash-lite');
+    }
     return { command: cmd, args: baseArgs };
   }
 
   return { command: cmd, args: extraFlags };
+}
+
+function extractModelFlag(args) {
+  const idx = args.findIndex((a) => a === '-m' || a === '--model');
+  return idx >= 0 && args[idx + 1] ? args[idx + 1] : null;
 }
 
 function classifyGeminiFailure(res) {
@@ -362,9 +376,10 @@ async function testCliConnection({ engine, providerConfig, workspaceDir, onLine 
       args: ['run', '--pure', '--dir', workspaceDir, `Reply with one short line: OK - ${engine} CLI connected`],
     };
   } else if (isGemini) {
+    const cfgModel = extractModelFlag(splitArgs(providerConfig?.args || ''));
     inv = {
       command: providerConfig?.command || 'gemini',
-      args: ['-p', 'Reply cleanly with one short line confirming connection.', '--approval-mode', 'plan', '--skip-trust'],
+      args: ['-m', cfgModel || 'gemini-3.5-flash-lite', '-p', 'Reply cleanly with one short line confirming connection.', '--approval-mode', 'plan', '--skip-trust'],
     };
   } else {
     inv = buildCliInvocation(engine, providerConfig, workspaceDir);

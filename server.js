@@ -60,7 +60,7 @@ function defaultAiConfig() {
     providers: {
       Gemini: {
         command: 'gemini',
-        args: '-p "Read the harness constitution, SKILL.md, and task in stdin carefully. Perform the work directly in the workspace and output SUMMARY, VERDICT (PASS or REJECT), CHANGED_FILES, and DETAILS." --yolo --skip-trust',
+        args: '-m gemini-3.5-flash-lite -p "Read the harness constitution, SKILL.md, and task in stdin carefully. Perform the work directly in the workspace and output SUMMARY, VERDICT (PASS or REJECT), CHANGED_FILES, and DETAILS." --yolo --skip-trust',
         timeoutMs: 120000,
         autoBridge: true,
       },
