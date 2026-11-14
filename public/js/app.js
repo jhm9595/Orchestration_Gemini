@@ -53,10 +53,7 @@ window.VF = window.VF || {};
         if (appState.engineState.terminalLogs.length > 120) appState.engineState.terminalLogs.shift();
         const term = document.getElementById('dTerminal');
         if (term) {
-          const logs = appState.engineState.terminalLogs;
-          const shown = logFilter === 'summary'
-            ? logs.filter((l) => /\[(DONE|IDEA INTAKE|PING-PONG|STOP HOOK BLOCK|CIRCUIT BREAKER|CS FEEDBACK|PING RESULT|CONTROL)\]/.test(l))
-            : logs;
+          const shown = window.VF.filterTerminalLogs(appState.engineState.terminalLogs, logFilter);
           term.textContent = shown.join('\n');
           term.scrollTop = term.scrollHeight;
         }

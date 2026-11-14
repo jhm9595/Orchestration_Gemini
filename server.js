@@ -793,6 +793,7 @@ const server = http.createServer(async (req, res) => {
           `INSERT INTO history (card_id, round, dept_key, dept_name, engine, action, summary, details, commit_hash, harness_meta, created_at)
            VALUES (?, ?, 'ceo', '👤 회장님(Human Steering)', 'Human', 'APPROVE', ?, ?, ?, '{}', ?)`
         ).run(id, card.retry_count + 1, `회장님 강제 승인 → ${DEPT_MAP[nextDept].name}`, body.comment || '수동 승인 및 차단 해제', fakeHash(`app-${id}-${t}`), t);
+        wakeFactoryForCard(id);
       } else {
         db.prepare(
           `INSERT INTO history (card_id, round, dept_key, dept_name, engine, action, summary, details, commit_hash, harness_meta, created_at)

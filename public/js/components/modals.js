@@ -15,6 +15,13 @@ window.VF = window.VF || {};
     READY: { text: '🟢 운영 대기', cls: 'badge-codex' },
   };
 
+  const SUMMARY_LOG_RE = /\[(DONE|IDEA INTAKE|PING-PONG|STOP HOOK BLOCK|CIRCUIT BREAKER|CS FEEDBACK|CS FEEDBACK LOOP|PING RESULT|CONTROL|ERROR)\]/;
+
+  window.VF.filterTerminalLogs = function (logs, mode) {
+    const list = Array.isArray(logs) ? logs : [];
+    return mode === 'summary' ? list.filter((l) => SUMMARY_LOG_RE.test(l)) : list;
+  };
+
   window.VF.renderCardDetailModal = function (detail, state, modalTab, logFilter, esc) {
     const { card, parentCard, childCards, history } = detail;
     const proj = state.projects.find((p) => p.id === card.project_id) || {};
@@ -41,9 +48,10 @@ window.VF = window.VF || {};
     }
 
     document.getElementById('dHistory').innerHTML = history.length
-      ? history.map((h) => {
+      ? history.map((h, idx) => {
           const isRej = ['REJECT', 'BLOCKED', 'STOP_HOOK_BLOCK'].includes(h.action);
-          const act = ACTION_LABELS[h.action] || { text: h.action, cls: 'badge-gemini' };
+          const showInlineSteer = isRej && idx === history.length - 1 && (card.last_verdict === 'BLOCKED' || card.last_verdict === 'FAIL');
+          const act = ACTION_LABELS[h.action] ? { text: esc(ACTION_LABELS[h.action].text), cls: ACTION_LABELS[h.action].cls } : { text: esc(h.action), cls: 'badge-gemini' };
           const meta = h.harness_meta || {};
           const files = meta.changedFiles || [];
           const durStr = meta.durationMs ? `⚡ ${(meta.durationMs / 1000).toFixed(1)}s` : '';
@@ -67,6 +75,11 @@ window.VF = window.VF || {};
               </div>
               <div class="event-title">${esc(h.summary)}</div>
               ${files.length ? `<div class="event-files">${files.map((f) => `<span class="file-chip">📄 ${esc(f)}</span>`).join('')}</div>` : ''}
+              ${showInlineSteer ? `
+                <div style="margin:8px 0;padding:8px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;display:flex;flex-wrap:wrap;gap:6px;">
+                  <button class="btn-sm btn-green" onclick="window.VF.steerCard('force_approve')">✅ 지금 강제 승인 · 다음 부서로 진행 (Blocked 해제)</button>
+                  <button class="btn-sm btn-amber" onclick="window.VF.steerCard('send_back')">🔄 수정 지시 후 개발부서(FE)로 재투입</button>
+                </div>` : ''}
               <details class="event-details" ${isRej ? 'open' : ''}>
                 <summary>📋 상세 내역 보기 및 컨텍스트 전문</summary>
                 <div class="hist-det" style="margin-top:6px;padding:8px;background:var(--surface-2);border-radius:6px;font-size:11.5px;white-space:pre-wrap;line-height:1.4;">${esc(h.details)}</div>
@@ -115,10 +128,7 @@ window.VF = window.VF || {};
 
     const term = document.getElementById('dTerminal');
     if (term) {
-      const logs = state.engineState.terminalLogs || [];
-      const shown = logFilter === 'summary'
-        ? logs.filter((l) => /\[(DONE|IDEA INTAKE|PING-PONG|STOP HOOK BLOCK|CIRCUIT BREAKER|CS FEEDBACK|PING RESULT|CONTROL)\]/.test(l))
-        : logs;
+      const shown = window.VF.filterTerminalLogs(state.engineState.terminalLogs, logFilter);
       term.textContent = shown.join('\n') || '(표시할 로그가 없습니다)';
       term.scrollTop = term.scrollHeight;
     }
