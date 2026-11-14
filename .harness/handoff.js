@@ -31,7 +31,7 @@ function assembleHandoffPacket({ card, dept, project, workspaceDir = '', history
     `=== [3. TARGET WORKSPACE & TASK] ===\n작업 디렉터리: ${workspaceDir}\n프로젝트: ${project.name} (${project.category} / 로케일: ${project.locales} / 수익화: ${project.monetization})\n카드 #${card.id}: ${card.title}\n요구사항(Spec): ${card.spec}`,
     `=== [4. PREVIOUS DEPT HANDOFFS] ===\n${prevHandoffs}`,
     `=== [5. REMEDIATION & QA FEEDBACK] ===\n${remediationText}`,
-    `=== [6. EXECUTION DIRECTIVE] ===\n${execScopeDirective}\n응답 마지막에는 반드시 아래 형식으로 요약하세요:\nVERDICT: PASS (또는 결함 발견 시 REJECT)\nSUMMARY: 한 줄 핵심 요약\nCHANGED_FILES: 수정하거나 검증한 파일 목록 (없으면 없음)\nDETAILS:\n구체적인 변경·검증 내용`,
+    `=== [6. EXECUTION DIRECTIVE] ===\n${execScopeDirective}\n절대 harness_factory.sqlite DB 파일을 직접 수정·삭제하거나 서버 프로세스를 종료하지 마세요.\n응답 마지막에는 반드시 아래 형식으로 요약하세요:\nVERDICT: PASS (또는 결함 발견 시 REJECT)\nSUMMARY: 한 줄 핵심 요약\nCHANGED_FILES: 수정하거나 검증한 파일 목록 (없으면 없음)\nDETAILS:\n구체적인 변경·검증 내용`,
   ].join('\n\n');
 
   return {

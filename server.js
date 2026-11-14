@@ -222,40 +222,82 @@ function ensureProjectWorkspaces() {
   });
 }
 
-function seedIfNeeded() {
-  const count = db.prepare('SELECT COUNT(*) AS cnt FROM projects').get().cnt;
-  if (count === 0) {
-    const t = nowIso();
-    const insProj = db.prepare(
-      'INSERT INTO projects (name, category, monetization, locales, color, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    );
-    const p1 = insProj.run('🌐 글로벌 해외직구 AI 소싱 & 쇼츠 봇', 'global_commerce', '제휴마케팅 + Stripe Pro 구독', 'KR, EN, JP, ES', 'indigo', 'ACTIVE', t).lastInsertRowid;
-    const p2 = insProj.run('🏠 [Self-Hosted] AI 벤처 팩토리 관제탑', 'web_saas', '내부 전용 하네스 관제탑', 'KR', 'violet', 'ACTIVE', t).lastInsertRowid;
+function ensureSeedProject(name, category, monetization, locales, color, createdAt) {
+  const existing = db.prepare('SELECT id FROM projects WHERE name = ?').get(name);
+  if (existing) return existing.id;
+  return db.prepare(
+    'INSERT INTO projects (name, category, monetization, locales, color, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(name, category, monetization, locales, color, 'ACTIVE', createdAt).lastInsertRowid;
+}
 
-    const insCard = db.prepare(
-      `INSERT INTO cards (project_id, title, spec, stage, current_dept, route_depts, completed_depts, retry_count, max_retries, assigned_engine, last_verdict, parent_card_id, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    insCard.run(
-      p1,
-      '다국어 해외직구 마진계산기 MVP 스캐폴드',
-      'KR/EN/JP/ES 환율 계산 모듈과 단위 테스트 파일을 생성하세요.',
-      'ideation',
-      'ceo',
-      JSON.stringify(routeDepartments('global_commerce', 'KR, EN, JP, ES', 'Stripe')),
-      '[]',
-      0, 3, 'Gemini', 'PENDING', null, t
-    );
-    insCard.run(
-      p2,
-      '각종 문구 템플릿 변경',
-      '핑퐁타임라인, 피드백, 로그 등이 인간 친화적인 템플릿으로 가독성좋게, 깔끔하게, 컴팩트하게 구성되어있으면 좋겠어.',
-      'engineering',
-      'fe',
-      JSON.stringify(['ceo', 'pm', 'ui', 'fe', 'sec', 'inf', 'cs']),
-      JSON.stringify(['ceo', 'pm', 'ui']),
-      0, 3, 'Gemini', 'PENDING', null, t
-    );
+function seedIfNeeded() {
+  const projCount = db.prepare('SELECT COUNT(*) AS cnt FROM projects').get().cnt;
+  const cardCount = db.prepare('SELECT COUNT(*) AS cnt FROM cards').get().cnt;
+  if (projCount === 0 || cardCount === 0) {
+    const t = nowIso();
+    const p1 = ensureSeedProject('🌐 글로벌 해외직구 AI 소싱 & 쇼츠 봇', 'global_commerce', '제휴마케팅 + Stripe Pro 구독', 'KR, EN, JP, ES', 'indigo', t);
+    const p2 = ensureSeedProject('🏠 [Self-Hosted] AI 벤처 팩토리 관제탑', 'web_saas', '내부 전용 하네스 관제탑', 'KR', 'violet', t);
+
+    if (cardCount === 0) {
+      db.exec('BEGIN');
+      try {
+        const insCard = db.prepare(
+          `INSERT INTO cards (project_id, title, spec, stage, current_dept, route_depts, completed_depts, retry_count, max_retries, assigned_engine, last_verdict, parent_card_id, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        const insHist = db.prepare(
+          `INSERT INTO history (card_id, round, dept_key, dept_name, engine, action, summary, details, commit_hash, created_at, harness_meta)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        insCard.run(
+          p1,
+          '다국어 해외직구 마진계산기 MVP 스캐폴드',
+          'KR/EN/JP/ES 환율 계산 모듈과 단위 테스트 파일을 생성하세요.',
+          'ideation',
+          'ceo',
+          JSON.stringify(routeDepartments('global_commerce', 'KR, EN, JP, ES', 'Stripe')),
+          '[]',
+          0, 3, 'Gemini', 'PENDING', null, t
+        );
+        const doneRoute = JSON.stringify(['ceo', 'pm', 'ui', 'fe', 'sec', 'inf', 'cs']);
+        const c2 = insCard.run(
+          p2,
+          '각종 문구 템플릿 변경',
+          '핑퐁타임라인, 피드백, 로그 등이 인간 친화적인 템플릿으로 가독성좋게, 깔끔하게, 컴팩트하게 구성되어있으면 좋겠어.',
+          'feedback_done',
+          'cs',
+          doneRoute,
+          doneRoute,
+          0, 3, 'Gemini', 'PASS', null, t
+        ).lastInsertRowid;
+        insHist.run(
+          c2, 1, 'cs', '14. 고객센터 & 피드백 루프', 'Codex', 'COMPLETE',
+          '컴팩트 타임라인·피드백·로그 템플릿 적용 및 검증 완료',
+          'UI 문구 템플릿 가독성 개선 및 Fast Gate 구문 검증 통과', 'd04ac7a', t,
+          JSON.stringify({ fastGate: { ok: true }, stopHook: { ok: true } })
+        );
+        const c3 = insCard.run(
+          p2,
+          '템플릿 변경',
+          'window.VF.filterTerminalLogs 공통 필터 추출, 차단 타임라인 원클릭 해제 버튼 배치 및 스티어링 자동 재개 적용',
+          'feedback_done',
+          'cs',
+          doneRoute,
+          doneRoute,
+          0, 3, 'Gemini', 'PASS', null, t
+        ).lastInsertRowid;
+        insHist.run(
+          c3, 1, 'fe', '5. FE / 클라이언트', 'Gemini', 'PASS',
+          'window.VF.filterTerminalLogs 추출 및 타임라인 인라인 해제 버튼 적용 완료 (30ac111)',
+          '모달/앱 로그 필터 중복 제거, 인라인 force_approve 즉시 재개, Fast Gate 및 구문 검사 통과', '30ac111', t,
+          JSON.stringify({ fastGate: { ok: true }, stopHook: { ok: true } })
+        );
+        db.exec('COMMIT');
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+    }
   }
   ensureProjectWorkspaces();
 }
@@ -263,19 +305,19 @@ function seedIfNeeded() {
 seedIfNeeded();
 
 // ---------------------------------------------------------------------------
-// 3. Engine State (Auto-Run on Real CLI, with live active card indicator)
+// 3. Engine State (Idle cleanly on boot, auto-wake on user idea/steer/feedback)
 // ---------------------------------------------------------------------------
 const engineState = {
-  listenerRunning: true,
+  listenerRunning: false,
   execMode: 'real_cli', // 'real_cli' | 'simulation'
   tickCount: 0,
   activeCardId: null,
   activeDeptName: null,
-  lastAction: '🟢 자율 실행 리스너 가동 중 · 새 아이디어/피드백 투입 시 즉시 착수합니다',
+  lastAction: '실제 CLI 대기 중 (새 아이디어·피드백 투입 시 즉시 자동 착수)',
   terminalLogs: [
     `[${nowIso().slice(11, 19)}] [HARNESS] 15개 프로덕션 SKILL.md(YAML+SOP+체크리스트) 업그레이드 완료`,
     `[${nowIso().slice(11, 19)}] [CLI] 실제 Gemini (gemini-3.5-flash-lite) / Codex CLI 러너 활성화`,
-    `[${nowIso().slice(11, 19)}] [AUTONOMOUS] 자율 실행 리스너 가동 중 (새 카드 투입 시 즉시 착수)`,
+    `[${nowIso().slice(11, 19)}] [READY] 서버 기동 완료 · 대기 상태 (새 아이디어·피드백 투입 시 즉시 착수)`,
   ],
 };
 
