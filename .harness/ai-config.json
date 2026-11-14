@@ -1,0 +1,36 @@
+{
+  "providers": {
+    "Gemini": {
+      "command": "gemini",
+      "args": "-p \"Read the harness constitution, SKILL.md, and task in stdin carefully. Perform the work directly in the workspace and output SUMMARY, VERDICT (PASS or REJECT), CHANGED_FILES, and DETAILS.\" --yolo --skip-trust",
+      "timeoutMs": 120000
+    },
+    "Codex": {
+      "command": "codex",
+      "args": "exec - -s workspace-write --ephemeral --skip-git-repo-check",
+      "timeoutMs": 120000
+    },
+    "Custom": {
+      "command": "claude",
+      "args": "-p --dangerously-skip-permissions",
+      "timeoutMs": 120000
+    }
+  },
+  "deptEngines": {
+    "ceo": "Gemini",
+    "pm": "Gemini",
+    "ui": "Gemini",
+    "db": "Gemini",
+    "be": "Gemini",
+    "fe": "Gemini",
+    "app": "Gemini",
+    "i18n": "Gemini",
+    "biz": "Gemini",
+    "sec": "Codex",
+    "law": "Codex",
+    "inf": "Gemini",
+    "ana": "Gemini",
+    "mkt": "Gemini",
+    "cs": "Codex"
+  }
+}

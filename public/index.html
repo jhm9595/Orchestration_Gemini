@@ -9,6 +9,7 @@
   <script src="/js/components/workforce.js" defer></script>
   <script src="/js/components/portfolio.js" defer></script>
   <script src="/js/components/harness.js" defer></script>
+  <script src="/js/components/ai-connect.js" defer></script>
   <script src="/js/components/modals.js" defer></script>
   <script src="/js/app.js" defer></script>
 </head>
@@ -17,22 +18,22 @@
     <div class="header-top">
       <div class="brand">
         <h1>🏭 AI 벤처 팩토리 관제탑</h1>
-        <span class="sub-pill">15개 부서 · 하네스 v3.0 (라이트·모듈형)</span>
+        <span class="sub-pill">15개 부서 · 실제 CLI 하네스 v3.1</span>
       </div>
       <div class="controls">
-        <button id="btnToggleListener" class="btn-green" onclick="window.VF.toggleListener()">🟢 자동 리스너 가동 중</button>
+        <button id="btnToggleListener" class="btn-amber" onclick="window.VF.toggleListener()">⏸️ 수동 대기 (쿼터 보호)</button>
         <button onclick="window.VF.stepOnce()">▶️ 1스텝 즉시 실행</button>
         <select id="execModeSelect" class="mode-select" onchange="window.VF.changeExecMode(this.value)">
-          <option value="simulation">🛡️ 시뮬레이션 데모 (토큰 0 소모)</option>
           <option value="real_cli">⚡ 실제 Gemini/Codex CLI 호출</option>
+          <option value="simulation">🛡️ 시뮬레이션 데모 (토큰 0 소모)</option>
         </select>
         <button class="btn-primary" onclick="window.VF.openIdeaModal()">+ 💡 새 아이디어 투입</button>
-        <button onclick="window.VF.openRemoteModal()">📱 외부/모바일 접속</button>
+        <button onclick="window.VF.openRemoteModal()">📱 외부 접속</button>
       </div>
     </div>
     <div class="status-ticker">
       <div><strong>실시간 상태:</strong> <span id="lastActionText">초기화 중...</span></div>
-      <div>총 처리 스텝: <strong id="tickCountText">0</strong> · SQLite WAL · 15 Skills + Linter + Stop Hook</div>
+      <div>실행 스텝: <strong id="tickCountText">0</strong> · SQLite WAL · 15 Pro Skills + Linter + Stop Hook</div>
     </div>
   </header>
 
@@ -41,7 +42,8 @@
       <button class="tab-btn active" data-tab="kanban" onclick="window.VF.switchTab('kanban')">📋 6단계 칸반 보드</button>
       <button class="tab-btn" data-tab="workforce" onclick="window.VF.switchTab('workforce')">🏢 15개 부서 조직도</button>
       <button class="tab-btn" data-tab="portfolio" onclick="window.VF.switchTab('portfolio')">🌍 프로젝트 포트폴리오</button>
-      <button class="tab-btn" data-tab="harness" onclick="window.VF.switchTab('harness')">⚙️ 하네스 엔지니어링 검증소</button>
+      <button class="tab-btn" data-tab="harness" onclick="window.VF.switchTab('harness')">⚙️ 하네스 검증소 · Skills</button>
+      <button class="tab-btn" data-tab="ai_connect" onclick="window.VF.switchTab('ai_connect')">🔌 AI 엔진 연결 설정</button>
     </div>
   </nav>
 
@@ -55,39 +57,34 @@
     <section id="tab-workforce" class="hidden"></section>
     <section id="tab-portfolio" class="hidden"></section>
     <section id="tab-harness" class="hidden"></section>
+    <section id="tab-ai_connect" class="hidden"></section>
   </main>
 
   <div id="detailModal" class="modal-backdrop hidden" onclick="if(event.target===this) window.VF.closeModal('detailModal')">
     <div class="modal">
       <div class="modal-head">
-        <div>
-          <strong id="dTitle" style="font-size:15px;"></strong>
-          <div id="dMeta" style="font-size:11.5px;color:var(--muted);margin-top:2px;"></div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button onclick="window.VF.stepCardOnce()" class="btn-primary">▶️ 이 카드 1스텝 진행</button>
-          <button onclick="window.VF.closeModal('detailModal')">✕ 닫기</button>
-        </div>
+        <div><strong id="dTitle" style="font-size:15px;"></strong><div id="dMeta" style="font-size:11.5px;color:var(--muted);margin-top:2px;"></div></div>
+        <div style="display:flex;gap:8px;"><button onclick="window.VF.stepCardOnce()" class="btn-primary">▶️ 이 카드 1스텝 진행</button><button onclick="window.VF.closeModal('detailModal')">✕ 닫기</button></div>
       </div>
       <div class="modal-tabs">
-        <button class="tab-btn m-tab-btn active" data-mtab="timeline" onclick="window.VF.switchModalTab('timeline')">📜 핑퐁 타임라인 &amp; CS 피드백</button>
+        <button class="tab-btn m-tab-btn active" data-mtab="timeline" onclick="window.VF.switchModalTab('timeline')">📜 컴팩트 타임라인 &amp; CS 피드백</button>
         <button class="tab-btn m-tab-btn" data-mtab="routing" onclick="window.VF.switchModalTab('routing')">🏢 15부서 라우팅 &amp; 회장님 지시</button>
-        <button class="tab-btn m-tab-btn" data-mtab="harness_logs" onclick="window.VF.switchModalTab('harness_logs')">🛡️ 하네스 Handoff · Linter · Stop Hook 로그</button>
+        <button class="tab-btn m-tab-btn" data-mtab="harness_logs" onclick="window.VF.switchModalTab('harness_logs')">🛡️ 하네스 · CLI 실행 로그</button>
       </div>
       <div class="modal-body">
         <div id="mtab-timeline" class="split-2">
-          <div>
-            <div id="dLineageBox" class="panel-box hidden"></div>
-            <div class="panel-box"><h4>📜 부서별 실행 &amp; 반려 타임라인</h4><div id="dHistory"></div></div>
-          </div>
-          <div>
-            <div class="panel-box">
-              <h4>🎧 고객센터(CS) 유저 피드백 투입기</h4>
-              <p style="font-size:11.5px;color:var(--muted);margin:0 0 8px;">실제 유저 불만을 접수하면 <strong>🎧 CS 부서</strong>가 자동 분류 후 <strong>개선 카드</strong>를 생성해 파이프라인에 투입합니다.</p>
-              <div class="form-row"><textarea id="csFeedbackInput" rows="3">일본어 번역에서 결제 버튼 글씨가 깨져서 결제가 안 돼요!</textarea></div>
-              <button class="btn-primary" style="width:100%;" onclick="window.VF.submitCsFeedback()">🎧 유저 피드백 접수 → 개선 카드 자동 생성</button>
+          <div><div id="dLineageBox" class="panel-box hidden"></div><div class="panel-box"><h4>📜 부서별 요약 타임라인</h4><div id="dHistory"></div></div></div>
+          <div><div class="panel-box">
+            <h4>🎧 고객센터(CS) 유저 피드백 투입기</h4>
+            <div class="filter-pills" style="margin-bottom:8px;">
+              <span class="pill" onclick="window.VF.setFeedbackPreset('모바일 화면에서 버튼과 문구가 깔끔하게 줄바꿈되지 않고 넘칩니다.')">🎨 UI/줄바꿈</span>
+              <span class="pill" onclick="window.VF.setFeedbackPreset('일본어 번역에서 결제 버튼 글씨가 깨져서 결제가 안 돼요!')">🌏 다국어 오역</span>
+              <span class="pill" onclick="window.VF.setFeedbackPreset('결제 웹훅 검증 실패 시 유저에게 재시도 안내가 뜨지 않습니다.')">💰 결제/버그</span>
             </div>
-          </div>
+            <div class="form-row"><textarea id="csFeedbackInput" rows="3" placeholder="실제 서비스에서 들어온 유저 불만이나 개선 요청을 입력하세요."></textarea></div>
+            <button class="btn-primary" style="width:100%;" onclick="window.VF.submitCsFeedback()">🎧 피드백 접수 → 개선 카드 자동 생성</button>
+            <div id="csFeedbackNotice" class="feedback-notice hidden"></div>
+          </div></div>
         </div>
         <div id="mtab-routing" class="split-2 hidden">
           <div class="panel-box"><h4>🏢 15개 부서 동적 라우팅 현황</h4><div id="dRouteList" class="route-list"></div></div>
@@ -95,7 +92,7 @@
             <div class="panel-box"><h4>📋 기획 스펙 &amp; 합격기준(Spec)</h4><div id="dSpec" style="font-size:12px;white-space:pre-wrap;color:#334155;"></div></div>
             <div class="panel-box">
               <h4>👑 회장님 직접 개입 (Human Steering)</h4>
-              <div class="form-row"><textarea id="steerComment" rows="2" placeholder="예: 라이트 테마와 프로젝트 컬러 존을 적용한 뒤 다시 검증해"></textarea></div>
+              <div class="form-row"><textarea id="steerComment" rows="2" placeholder="수정 지시나 재검증 코멘트 입력"></textarea></div>
               <div style="display:flex;flex-direction:column;gap:6px;">
                 <button class="btn-amber" onclick="window.VF.steerCard('send_back')">🔄 수정 지시 &amp; 개발부서 반송</button>
                 <button class="btn-green" onclick="window.VF.steerCard('force_approve')">✅ 강제 승인 / Blocked 해제</button>
@@ -106,7 +103,13 @@
         </div>
         <div id="mtab-harness_logs" class="hidden">
           <div id="dHarnessHistory"></div>
-          <div class="panel-box"><h4>📡 실시간 에이전트 터미널 로그</h4><div id="dTerminal" class="term-box"></div></div>
+          <div class="panel-box">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <h4 style="margin:0;">📡 실시간 CLI &amp; 하네스 로그</h4>
+              <div class="view-switch"><button class="log-filter-btn active" data-lf="all" onclick="window.VF.setLogFilter('all')">전체 로그</button><button class="log-filter-btn" data-lf="summary" onclick="window.VF.setLogFilter('summary')">핵심 이벤트만</button></div>
+            </div>
+            <div id="dTerminal" class="term-box"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -123,10 +126,7 @@
             <div><label>유형</label><select id="ideaCategory"><option value="web_saas">🌐 웹 SaaS</option><option value="mobile_game">🎮 모바일 게임</option><option value="shorts_bot">🎬 쇼츠/자동화 봇</option><option value="global_commerce">🛒 해외직구 커머스</option></select></div>
             <div><label>존 컬러</label><select id="ideaColor"><option value="indigo">🔵 Indigo</option><option value="emerald">🟢 Emerald</option><option value="amber">🟠 Amber</option><option value="rose">🔴 Rose</option><option value="violet">🟣 Violet</option><option value="cyan">🩵 Cyan</option></select></div>
           </div>
-          <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <div><label>다국어</label><input id="ideaLocales" value="KR, EN, JP, ES" /></div>
-            <div><label>수익화</label><input id="ideaMonetization" value="AdSense + Stripe 구독" /></div>
-          </div>
+          <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div><label>다국어</label><input id="ideaLocales" value="KR, EN, JP, ES" /></div><div><label>수익화</label><input id="ideaMonetization" value="AdSense + Stripe 구독" /></div></div>
         </div>
         <div class="form-row"><label>작업 카드 제목</label><input id="ideaTitle" placeholder="예: 다국어 결제 모듈 구축" /></div>
         <div class="form-row"><label>요구사항</label><textarea id="ideaSpec" rows="3" placeholder="기능, 디자인, 수익화 조건 입력"></textarea></div>
@@ -139,8 +139,8 @@
     <div class="modal modal-sm">
       <div class="modal-head"><strong>📱 외부 / 스마트폰 실시간 접속</strong><button onclick="window.VF.closeModal('remoteModal')">✕</button></div>
       <div class="modal-body">
-        <div class="panel-box"><h4>1️⃣ 같은 Wi-Fi 스마트폰 접속</h4><code id="lanUrlCode" style="font-size:13px;color:var(--green);"></code></div>
-        <div class="panel-box"><h4>2️⃣ 외부 망 무료 보안 터널링</h4><div class="term-box">npx cloudflared tunnel --url http://localhost:3030</div></div>
+        <div class="panel-box"><h4>1️⃣ 같은 망 PC/모바일 접속</h4><code id="lanUrlCode" style="font-size:13px;color:var(--green);"></code></div>
+        <div class="panel-box"><h4>2️⃣ 공유기/Wi-Fi 달라도 무료 보안 터널링</h4><div class="term-box">npx cloudflared tunnel --url http://localhost:3030</div></div>
       </div>
     </div>
   </div>

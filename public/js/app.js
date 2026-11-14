@@ -3,11 +3,15 @@ window.VF = window.VF || {};
 (function () {
   let appState = null;
   let harnessData = null;
+  let aiConfigData = null;
+  let pingResults = {};
   let selectedProjectId = 0;
   let boardMode = 'columns';
   let activeTab = 'kanban';
   let modalTab = 'timeline';
+  let logFilter = 'all';
   let selectedSkillKey = 'ui';
+  let isEditingSkill = false;
   let currentCardId = null;
 
   function esc(str) {
@@ -25,7 +29,13 @@ window.VF = window.VF || {};
   async function refreshHarness() {
     const res = await fetch('/api/harness');
     harnessData = await res.json();
-    if (activeTab === 'harness') window.VF.renderHarness(harnessData, selectedSkillKey, esc);
+    if (activeTab === 'harness') window.VF.renderHarness(harnessData, selectedSkillKey, isEditingSkill, esc);
+  }
+
+  async function refreshAiConfig() {
+    const res = await fetch('/api/ai-config');
+    aiConfigData = await res.json();
+    if (activeTab === 'ai_connect') window.VF.renderAiConnect(aiConfigData, pingResults, esc);
   }
 
   function connectSse() {
@@ -40,10 +50,14 @@ window.VF = window.VF || {};
         }
       } else if (msg.type === 'log' && appState) {
         appState.engineState.terminalLogs.push(msg.line);
-        if (appState.engineState.terminalLogs.length > 90) appState.engineState.terminalLogs.shift();
+        if (appState.engineState.terminalLogs.length > 120) appState.engineState.terminalLogs.shift();
         const term = document.getElementById('dTerminal');
         if (term) {
-          term.textContent = appState.engineState.terminalLogs.join('\n');
+          const logs = appState.engineState.terminalLogs;
+          const shown = logFilter === 'summary'
+            ? logs.filter((l) => /\[(DONE|IDEA INTAKE|PING-PONG|STOP HOOK BLOCK|CIRCUIT BREAKER|CS FEEDBACK|PING RESULT|CONTROL)\]/.test(l))
+            : logs;
+          term.textContent = shown.join('\n');
           term.scrollTop = term.scrollHeight;
         }
       }
@@ -54,7 +68,7 @@ window.VF = window.VF || {};
     if (!appState) return;
     const es = appState.engineState;
     const btn = document.getElementById('btnToggleListener');
-    btn.textContent = es.listenerRunning ? '🟢 자동 리스너 가동 중' : '⏸️ 리스너 일시정지됨';
+    btn.textContent = es.listenerRunning ? '🟢 자동 리스너 가동 중' : '⏸️ 수동 대기 (쿼터 보호)';
     btn.className = es.listenerRunning ? 'btn-green' : 'btn-amber';
     document.getElementById('execModeSelect').value = es.execMode;
     document.getElementById('lastActionText').textContent = es.lastAction;
@@ -66,18 +80,22 @@ window.VF = window.VF || {};
     window.VF.renderWorkforce(appState, esc);
     window.VF.renderPortfolio(appState, esc);
     if (harnessData && activeTab === 'harness') {
-      window.VF.renderHarness(harnessData, selectedSkillKey, esc);
+      window.VF.renderHarness(harnessData, selectedSkillKey, isEditingSkill, esc);
+    }
+    if (aiConfigData && activeTab === 'ai_connect') {
+      window.VF.renderAiConnect(aiConfigData, pingResults, esc);
     }
   }
 
   function switchTab(tab) {
     activeTab = tab;
     document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-    ['kanban', 'workforce', 'portfolio', 'harness'].forEach((t) => {
+    ['kanban', 'workforce', 'portfolio', 'harness', 'ai_connect'].forEach((t) => {
       document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
     });
     document.getElementById('kanbanSubBar').classList.toggle('hidden', tab !== 'kanban');
     if (tab === 'harness') refreshHarness();
+    if (tab === 'ai_connect') refreshAiConfig();
   }
 
   function switchModalTab(mtab) {
@@ -87,6 +105,8 @@ window.VF = window.VF || {};
 
   async function openCardDetail(id) {
     currentCardId = id;
+    const notice = document.getElementById('csFeedbackNotice');
+    if (notice) notice.classList.add('hidden');
     await loadCardDetail(id);
     document.getElementById('detailModal').classList.remove('hidden');
   }
@@ -95,7 +115,7 @@ window.VF = window.VF || {};
     const res = await fetch(`/api/cards/${id}/history`);
     if (!res.ok) return;
     const detail = await res.json();
-    window.VF.renderCardDetailModal(detail, appState, modalTab, esc);
+    window.VF.renderCardDetailModal(detail, appState, modalTab, logFilter, esc);
   }
 
   function openIdeaModal(projId = '') {
@@ -170,7 +190,73 @@ window.VF = window.VF || {};
     if (res.ok) {
       const data = await res.json();
       await loadCardDetail(currentCardId);
-      alert(`🎧 고객센터 접수 완료! 개선 카드 #${data.childId}가 생성되어 개발 파이프라인으로 자동 투입되었습니다.`);
+      const notice = document.getElementById('csFeedbackNotice');
+      if (notice) {
+        notice.innerHTML = `✅ 접수 완료! 파생 개선 카드 <a href="#" style="color:#065f46;font-weight:700;" onclick="window.VF.openCardDetail(${data.childId});return false;">#${data.childId}</a>가 자동 생성되었습니다.`;
+        notice.classList.remove('hidden');
+      }
+    }
+  }
+
+  async function pingAiEngine(engine) {
+    pingResults[engine] = { loading: true };
+    window.VF.renderAiConnect(aiConfigData, pingResults, esc);
+    const cmdEl = document.getElementById(`cfg-cmd-${engine}`);
+    const argsEl = document.getElementById(`cfg-args-${engine}`);
+    const toEl = document.getElementById(`cfg-timeout-${engine}`);
+    const bridgeEl = document.getElementById(`cfg-autobridge-${engine}`);
+    const providerConfig = cmdEl
+      ? {
+          command: cmdEl.value,
+          args: argsEl.value,
+          timeoutMs: Number(toEl.value || 60000),
+          ...(bridgeEl ? { autoBridge: bridgeEl.checked } : {}),
+        }
+      : (engine === 'OpenCode' ? { command: 'opencode', args: '', timeoutMs: 60000 } : undefined);
+    const res = await fetch('/api/ai-config/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ engine, providerConfig }),
+    });
+    pingResults[engine] = await res.json();
+    window.VF.renderAiConnect(aiConfigData, pingResults, esc);
+  }
+
+  async function saveAiConfig() {
+    if (!aiConfigData) return;
+    const providers = {};
+    for (const key of ['Gemini', 'Codex', 'Custom']) {
+      const bridgeEl = document.getElementById(`cfg-autobridge-${key}`);
+      providers[key] = {
+        command: document.getElementById(`cfg-cmd-${key}`).value,
+        args: document.getElementById(`cfg-args-${key}`).value,
+        timeoutMs: Number(document.getElementById(`cfg-timeout-${key}`).value || 120000),
+        ...(bridgeEl ? { autoBridge: bridgeEl.checked } : {}),
+      };
+    }
+    const deptEngines = {};
+    for (const d of aiConfigData.departments) {
+      const sel = document.getElementById(`dept-eng-${d.key}`);
+      if (sel) deptEngines[d.key] = sel.value;
+    }
+    const res = await fetch('/api/ai-config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ providers, deptEngines }),
+    });
+    if (res.ok) {
+      await refreshAiConfig();
+      await fetchState();
+    }
+  }
+
+  async function saveEditedSkill(key) {
+    const ta = document.getElementById('skillEditorTextarea');
+    if (!ta) return;
+    const res = await fetch(`/api/harness/skills/${key}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: ta.value }),
+    });
+    if (res.ok) {
+      isEditingSkill = false;
+      await refreshHarness();
     }
   }
 
@@ -191,15 +277,34 @@ window.VF = window.VF || {};
   window.VF.setProjectColor = setProjectColor;
   window.VF.steerCard = steerCard;
   window.VF.submitCsFeedback = submitCsFeedback;
+  window.VF.setFeedbackPreset = (txt) => {
+    const el = document.getElementById('csFeedbackInput');
+    if (el) el.value = txt;
+  };
+  window.VF.setLogFilter = (mode) => {
+    logFilter = mode;
+    document.querySelectorAll('.log-filter-btn').forEach((b) => b.classList.toggle('active', b.dataset.lf === mode));
+    if (currentCardId) loadCardDetail(currentCardId);
+  };
   window.VF.refreshHarness = refreshHarness;
   window.VF.selectHarnessSkill = (key) => {
     selectedSkillKey = key;
-    if (harnessData) window.VF.renderHarness(harnessData, selectedSkillKey, esc);
+    isEditingSkill = false;
+    if (harnessData) window.VF.renderHarness(harnessData, selectedSkillKey, isEditingSkill, esc);
   };
+  window.VF.toggleEditSkill = (flag) => {
+    isEditingSkill = flag;
+    if (harnessData) window.VF.renderHarness(harnessData, selectedSkillKey, isEditingSkill, esc);
+  };
+  window.VF.saveEditedSkill = saveEditedSkill;
   window.VF.openSkillFromWorkforce = (key) => {
     selectedSkillKey = key;
+    isEditingSkill = false;
     switchTab('harness');
   };
+  window.VF.refreshAiConfig = refreshAiConfig;
+  window.VF.pingAiEngine = pingAiEngine;
+  window.VF.saveAiConfig = saveAiConfig;
 
   fetchState().then(connectSse);
 })();

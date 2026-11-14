@@ -1,7 +1,7 @@
 window.VF = window.VF || {};
 
 (function () {
-  window.VF.renderHarness = function (harnessData, selectedSkillKey, esc) {
+  window.VF.renderHarness = function (harnessData, selectedSkillKey, isEditingSkill, esc) {
     const container = document.getElementById('tab-harness');
     if (!container) return;
     if (!harnessData) {
@@ -47,7 +47,7 @@ window.VF = window.VF || {};
           <div class="panel-box">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
               <h4 style="margin:0;">🔍 Mechanical Fast Gate Linter (실제 코드베이스 검사)</h4>
-              <button class="btn-sm btn-primary" onclick="window.VF.refreshHarness()">🔍 지금 코드베이스 린터/Stop Hook 재검사</button>
+              <button class="btn-sm btn-primary" onclick="window.VF.refreshHarness()">🔍 지금 코드베이스 린터 재검사</button>
             </div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
               <div class="dept-status"><strong>index.html</strong><br/>${m.indexLines || 0}줄 (한계 150줄)</div>
@@ -57,20 +57,28 @@ window.VF = window.VF || {};
             ${checksHtml}
           </div>
           <div class="panel-box">
-            <h4>🪝 라이프사이클 훅 & Fresh-Context Handoff 엔진</h4>
+            <h4>🪝 라이프사이클 훅 &amp; Fresh-Context Handoff 엔진</h4>
             ${hooksHtml}
           </div>
         </div>
 
         <div>
           <div class="panel-box">
-            <h4>📘 15개 전문 부서 On-Demand Skills (.harness/skills/*.md)</h4>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+              <h4 style="margin:0;">📘 15개 부서 On-Demand Skills (.harness/skills/*.md)</h4>
+              ${activeSkill ? (isEditingSkill
+                ? `<div style="display:flex;gap:6px;"><button class="btn-sm btn-green" onclick="window.VF.saveEditedSkill('${esc(activeSkill.key)}')">💾 저장</button><button class="btn-sm" onclick="window.VF.toggleEditSkill(false)">취소</button></div>`
+                : `<button class="btn-sm" onclick="window.VF.toggleEditSkill(true)">✏️ 이 SKILL.md 편집</button>`) : ''}
+            </div>
             <div class="filter-pills" style="margin-bottom:10px;">${skillPills}</div>
             ${activeSkill ? `
               <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px;">
-                파일 경로: <code>${esc(activeSkill.path)}</code> · ${activeSkill.bytes} bytes
+                경로: <code>${esc(activeSkill.path)}</code> · ${activeSkill.bytes} bytes · ${activeSkill.lines}줄
               </div>
-              <div class="skill-viewer">${esc(activeSkill.content)}</div>
+              ${isEditingSkill
+                ? `<textarea id="skillEditorTextarea" rows="16" style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;padding:10px;border-radius:8px;border:1px solid var(--border-strong);">${esc(activeSkill.content)}</textarea>`
+                : `<div class="skill-viewer" style="max-height:420px;">${esc(activeSkill.content)}</div>`
+              }
             ` : ''}
           </div>
         </div>

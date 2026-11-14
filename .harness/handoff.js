@@ -1,4 +1,4 @@
-function assembleHandoffPacket({ card, dept, project, historyRows = [], skillContent = '', agentsMdContent = '' }) {
+function assembleHandoffPacket({ card, dept, project, workspaceDir = '', historyRows = [], skillContent = '', agentsMdContent = '' }) {
   const constitutionLines = (agentsMdContent || '')
     .split('\n')
     .filter((l) => l.startsWith('1.') || l.startsWith('2.') || l.startsWith('3.') || l.startsWith('4.') || l.startsWith('5.') || l.startsWith('`Agent'))
@@ -6,7 +6,7 @@ function assembleHandoffPacket({ card, dept, project, historyRows = [], skillCon
     .join('\n');
 
   const prevHandoffs = historyRows
-    .filter((h) => h.action !== 'REJECT' && h.action !== 'BLOCKED')
+    .filter((h) => h.action !== 'REJECT' && h.action !== 'BLOCKED' && h.action !== 'STOP_HOOK_BLOCK')
     .slice(-3)
     .map((h) => `- [R${h.round} ${h.dept_name}] ${h.summary}`)
     .join('\n') || '- (초기 착수 단계)';
@@ -22,9 +22,10 @@ function assembleHandoffPacket({ card, dept, project, historyRows = [], skillCon
   const prompt = [
     `=== [1. CONSTITUTION (AGENTS.md)] ===\n${constitutionLines || 'Secret Isolation · Slopsquatting Guard · Max Retries=3'}`,
     `=== [2. ON-DEMAND SKILL (${dept.name})] ===\n${skillContent.trim()}`,
-    `=== [3. TARGET TASK & PROJECT] ===\n프로젝트: ${project.name} (${project.category} / 로케일: ${project.locales} / 수익화: ${project.monetization})\n카드 #${card.id}: ${card.title}\n스펙: ${card.spec}`,
+    `=== [3. TARGET WORKSPACE & TASK] ===\n작업 디렉터리: ${workspaceDir}\n프로젝트: ${project.name} (${project.category} / 로케일: ${project.locales} / 수익화: ${project.monetization})\n카드 #${card.id}: ${card.title}\n요구사항(Spec): ${card.spec}`,
     `=== [4. PREVIOUS DEPT HANDOFFS] ===\n${prevHandoffs}`,
     `=== [5. REMEDIATION & QA FEEDBACK] ===\n${remediationText}`,
+    `=== [6. EXECUTION DIRECTIVE] ===\n위 작업 디렉터리(${workspaceDir})의 실제 파일을 읽고 필요한 코드를 직접 작성/수정하거나 테스트·감사를 수행하세요.\n응답 마지막에는 반드시 아래 형식으로 요약하세요:\nVERDICT: PASS (또는 결함 발견 시 REJECT)\nSUMMARY: 한 줄 핵심 요약\nCHANGED_FILES: 수정하거나 검증한 파일 목록\nDETAILS:\n구체적인 변경·검증 내용`,
   ].join('\n\n');
 
   return {
@@ -34,7 +35,7 @@ function assembleHandoffPacket({ card, dept, project, historyRows = [], skillCon
     prevCount: historyRows.length,
     hasRemediation: Boolean(remediationRow),
     remediationSummary: remediationRow ? remediationRow.summary : null,
-    preview: prompt.slice(0, 480) + (prompt.length > 480 ? '\n...(Fresh Context 주입 완료)' : ''),
+    preview: prompt.slice(0, 520) + (prompt.length > 520 ? '\n...(Fresh Context 주입 완료)' : ''),
     prompt,
   };
 }
