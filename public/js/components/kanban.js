@@ -1,21 +1,23 @@
 window.VF = window.VF || {};
 
 (function () {
-  function renderCardMarkup(c, proj, deptMap, esc) {
+  function renderCardMarkup(c, proj, deptMap, engineState, esc) {
     const dept = deptMap[c.current_dept] || { name: c.current_dept };
     const pct = Math.round((c.completed_depts.length / Math.max(1, c.route_depts.length)) * 100);
+    const isWorking = engineState?.activeCardId === c.id;
     const isBlocked = c.last_verdict === 'BLOCKED';
-    const engClass = isBlocked ? 'badge-blocked' : (c.assigned_engine === 'Codex' ? 'badge-codex' : 'badge-gemini');
-    const engLabel = isBlocked ? '🚨 BLOCKED' : c.assigned_engine;
+    const engClass = isWorking ? 'badge-amber' : isBlocked ? 'badge-blocked' : (c.assigned_engine === 'Codex' ? 'badge-codex' : 'badge-gemini');
+    const engLabel = isWorking ? '⚡ AI 실행중' : isBlocked ? '🚨 BLOCKED' : c.assigned_engine;
     const themeClass = `proj-theme-${proj.color || 'indigo'}`;
 
     return `
-      <div class="k-card ${themeClass} ${isBlocked ? 'blocked' : ''}" onclick="window.VF.openCardDetail(${c.id})">
+      <div class="k-card ${themeClass} ${isWorking ? 'working' : ''} ${isBlocked ? 'blocked' : ''}" onclick="window.VF.openCardDetail(${c.id})">
         <div class="card-top">
           <span class="proj-tag" title="${esc(proj.name)}">${esc(proj.name)}</span>
           <span class="badge ${engClass}">${engLabel} · R${c.retry_count + 1}/${c.max_retries}</span>
         </div>
         <div class="card-title">#${c.id} ${esc(c.title)}</div>
+        ${isWorking ? `<div class="badge badge-amber" style="margin-bottom:6px;display:inline-block;">⚡ ${esc(engineState.activeDeptName || dept.name)} AI CLI 실행 중...</div>` : ''}
         <div class="card-dept">
           <span>${esc(dept.name)}</span>
           <span style="color:var(--muted)">${c.completed_depts.length}/${c.route_depts.length} (${pct}%)</span>
@@ -74,7 +76,7 @@ window.VF = window.VF || {};
               </div>
             </div>
             <div class="zone-cards-grid">
-              ${pCards.map((c) => renderCardMarkup(c, proj, deptMap, esc)).join('') || '<div style="color:var(--muted);padding:12px;">진행 중인 카드가 없습니다.</div>'}
+              ${pCards.map((c) => renderCardMarkup(c, proj, deptMap, state.engineState, esc)).join('') || '<div style="color:var(--muted);padding:12px;">진행 중인 카드가 없습니다.</div>'}
             </div>
           </div>`;
       }).join('');
@@ -86,7 +88,7 @@ window.VF = window.VF || {};
       const colCards = filtered.filter((c) => c.stage === st.key);
       const cardsHtml = colCards.map((c) => {
         const proj = projMap[c.project_id] || { name: '프로젝트', color: 'indigo' };
-        return renderCardMarkup(c, proj, deptMap, esc);
+        return renderCardMarkup(c, proj, deptMap, state.engineState, esc);
       }).join('');
       return `
         <div class="k-col">

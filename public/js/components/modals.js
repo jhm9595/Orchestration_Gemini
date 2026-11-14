@@ -32,9 +32,10 @@ window.VF = window.VF || {};
     const linBox = document.getElementById('dLineageBox');
     if (parentCard || childCards.length) {
       linBox.classList.remove('hidden');
-      linBox.innerHTML = `<h4>🔗 작업 가계도 (Lineage)</h4>` +
-        (parentCard ? `<div style="margin-bottom:4px;">⬆️ 원본: <a href="#" style="color:var(--accent);" onclick="window.VF.openCardDetail(${parentCard.id});return false;">#${parentCard.id} ${esc(parentCard.title)}</a></div>` : '') +
-        childCards.map((ch) => `<div>⬇️ 파생 개선: <a href="#" style="color:var(--green);" onclick="window.VF.openCardDetail(${ch.id});return false;">#${ch.id} ${esc(ch.title)}</a></div>`).join('');
+      linBox.innerHTML = `<h4 style="margin-bottom:6px;font-size:12px;color:var(--text);">🔗 작업 가계도 (Lineage)</h4><div style="display:flex;flex-direction:column;gap:4px;">` +
+        (parentCard ? `<div style="font-size:11.5px;">⬆️ 원본 카드: <a href="#" style="color:var(--accent);font-weight:600;" onclick="window.VF.openCardDetail(${parentCard.id});return false;">#${parentCard.id} ${esc(parentCard.title)}</a></div>` : '') +
+        childCards.map((ch) => `<div style="font-size:11.5px;">⬇️ 파생 개선: <a href="#" style="color:var(--green);font-weight:600;" onclick="window.VF.openCardDetail(${ch.id});return false;">#${ch.id} ${esc(ch.title)}</a></div>`).join('') +
+        `</div>`;
     } else {
       linBox.classList.add('hidden');
     }
@@ -48,27 +49,31 @@ window.VF = window.VF || {};
           const durStr = meta.durationMs ? `⚡ ${(meta.durationMs / 1000).toFixed(1)}s` : '';
           const cliTag = meta.realCli ? '실제 CLI' : '요약';
           const cls = isRej ? 'reject' : (h.engine === 'Codex' ? 'codex' : '');
+          const commitShort = h.commit_hash ? h.commit_hash.slice(0, 7) : 'no-commit';
 
           return `
             <div class="compact-event ${cls}">
               <div class="event-head">
                 <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                  <strong>${esc(h.dept_name)}</strong>
+                  <span style="font-weight:700;color:var(--text);">${esc(h.dept_name)}</span>
                   <span class="badge ${act.cls}">${act.text}</span>
                   <span class="sub-pill">R${h.round} · ${esc(h.engine)} (${cliTag})</span>
                   ${durStr ? `<span class="sub-pill">${durStr}</span>` : ''}
                 </div>
-                <span style="color:var(--muted);">${esc(h.created_at.slice(11, 19))}</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span class="sub-pill" style="font-family:ui-monospace,Consolas,monospace;">#${esc(commitShort)}</span>
+                  <span style="color:var(--muted);font-size:11px;">${esc(h.created_at.slice(11, 19))}</span>
+                </div>
               </div>
               <div class="event-title">${esc(h.summary)}</div>
               ${files.length ? `<div class="event-files">${files.map((f) => `<span class="file-chip">📄 ${esc(f)}</span>`).join('')}</div>` : ''}
               <details class="event-details" ${isRej ? 'open' : ''}>
-                <summary>상세 내역 펼치기 (#${esc(h.commit_hash)})</summary>
-                <div class="hist-det" style="margin-top:5px;">${esc(h.details)}</div>
+                <summary>📋 상세 내역 보기 및 컨텍스트 전문</summary>
+                <div class="hist-det" style="margin-top:6px;padding:8px;background:var(--surface-2);border-radius:6px;font-size:11.5px;white-space:pre-wrap;line-height:1.4;">${esc(h.details)}</div>
               </details>
             </div>`;
         }).join('')
-      : '<div style="color:var(--muted);font-size:12px;">아직 실행 이력이 없습니다. 우측 상단 [▶️ 이 카드 1스텝 진행]을 눌러보세요.</div>';
+      : '<div style="color:var(--muted);font-size:12px;padding:12px;text-align:center;background:var(--surface);border:1px dashed var(--border);border-radius:8px;">아직 실행 이력이 없습니다. 우측 상단 [▶️ 이 카드 1스텝 진행]을 눌러보세요.</div>';
 
     // Tab 2: 15-Dept Routing & Human Steering
     document.getElementById('dSpec').textContent = card.spec;

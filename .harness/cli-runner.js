@@ -4,6 +4,7 @@ const os = require('node:os');
 const { execFile, spawn } = require('node:child_process');
 
 const IS_WIN = process.platform === 'win32';
+const PLANNING_DEPTS = new Set(['ceo', 'pm', 'law', 'mkt', 'ana', 'cs']);
 
 function stripAnsi(str) {
   return String(str || '').replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim();
@@ -297,7 +298,7 @@ function diffSnapshots(before, after) {
   return changed;
 }
 
-function buildCliInvocation(engine, providerCfg, workspaceDir, bridgeMode = false) {
+function buildCliInvocation(engine, providerCfg, workspaceDir, bridgeMode = false, deptKey = '') {
   if (bridgeMode) {
     return {
       command: 'codex',
@@ -326,11 +327,17 @@ function buildCliInvocation(engine, providerCfg, workspaceDir, bridgeMode = fals
   }
 
   if (lower.includes('gemini')) {
-    const baseArgs = extraFlags.length
+    let baseArgs = extraFlags.length
       ? [...extraFlags]
       : ['-m', 'gemini-3.5-flash-lite', '-p', 'Read the harness constitution, SKILL.md, and task in stdin carefully. Perform the work directly in the workspace and output SUMMARY, VERDICT (PASS or REJECT), CHANGED_FILES, and DETAILS.', '--yolo', '--skip-trust'];
     if (!baseArgs.includes('-m') && !baseArgs.includes('--model')) {
       baseArgs.unshift('-m', 'gemini-3.5-flash-lite');
+    }
+    if (PLANNING_DEPTS.has(deptKey)) {
+      baseArgs = baseArgs.filter((a) => a !== '--yolo' && a !== '-y');
+      if (!baseArgs.includes('--approval-mode')) {
+        baseArgs.push('--approval-mode', 'plan');
+      }
     }
     return { command: cmd, args: baseArgs };
   }
@@ -480,7 +487,7 @@ function parseCliOutput(rawOutput, dept, changedFiles) {
 async function runDepartmentCli({ engine, providerConfig, promptText, workspaceDir, dept, onLine }) {
   fs.mkdirSync(workspaceDir, { recursive: true });
   const beforeSnap = snapshotWorkspace(workspaceDir);
-  const inv = buildCliInvocation(engine, providerConfig, workspaceDir, false);
+  const inv = buildCliInvocation(engine, providerConfig, workspaceDir, false, dept?.key || '');
   const timeoutMs = Number(providerConfig?.timeoutMs || 120000);
   const cmdLower = inv.command.toLowerCase();
   const isGemini = engine === 'Gemini' || cmdLower.includes('gemini');

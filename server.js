@@ -263,17 +263,19 @@ function seedIfNeeded() {
 seedIfNeeded();
 
 // ---------------------------------------------------------------------------
-// 3. Engine State (Quota-Safe: real_cli by default, listener paused until started)
+// 3. Engine State (Auto-Run on Real CLI, with live active card indicator)
 // ---------------------------------------------------------------------------
 const engineState = {
-  listenerRunning: false,
+  listenerRunning: true,
   execMode: 'real_cli', // 'real_cli' | 'simulation'
   tickCount: 0,
-  lastAction: '실제 CLI 모드 준비 완료 (쿼터 보호를 위해 자동 반복은 대기 상태 · 1스텝 실행 또는 리스너 ON 가능)',
+  activeCardId: null,
+  activeDeptName: null,
+  lastAction: '🟢 자율 실행 리스너 가동 중 · 새 아이디어/피드백 투입 시 즉시 착수합니다',
   terminalLogs: [
     `[${nowIso().slice(11, 19)}] [HARNESS] 15개 프로덕션 SKILL.md(YAML+SOP+체크리스트) 업그레이드 완료`,
-    `[${nowIso().slice(11, 19)}] [CLI] 실제 Gemini / Codex CLI 러너 및 git/파일 변경 추적 활성화`,
-    `[${nowIso().slice(11, 19)}] [SAFEGUARD] 구독 할당량 보호를 위해 자동 반복은 수동 대기 중입니다`,
+    `[${nowIso().slice(11, 19)}] [CLI] 실제 Gemini (gemini-3.5-flash-lite) / Codex CLI 러너 활성화`,
+    `[${nowIso().slice(11, 19)}] [AUTONOMOUS] 자율 실행 리스너 가동 중 (새 카드 투입 시 즉시 착수)`,
   ],
 };
 
@@ -345,7 +347,7 @@ async function tickListener(forcedCardId = null) {
   if (isTicking) return { progressed: false, reason: '이미 다른 에이전트 스텝이 실행 중입니다.' };
   isTicking = true;
   try {
-    const allCards = db.prepare('SELECT * FROM cards ORDER BY updated_at ASC, id ASC').all();
+    const allCards = db.prepare('SELECT * FROM cards ORDER BY id DESC').all();
     const target = allCards.find((c) => {
       if (forcedCardId && c.id !== forcedCardId) return false;
       if (c.last_verdict === 'BLOCKED') return false;
@@ -368,6 +370,11 @@ async function tickListener(forcedCardId = null) {
     const activeEngine = aiConfig.deptEngines[dept.key] || dept.engine;
     const round = target.retry_count + 1;
     const t = nowIso();
+
+    engineState.activeCardId = target.id;
+    engineState.activeDeptName = dept.name;
+    engineState.lastAction = `⚡ [${activeEngine}] #${target.id} ${dept.name} 착수 중...`;
+    broadcastFullState();
 
     const skill = loadSkillForDept(dept.key);
     const agentsMd = fs.existsSync(AGENTS_MD_PATH) ? fs.readFileSync(AGENTS_MD_PATH, 'utf8') : '';
@@ -491,6 +498,11 @@ async function tickListener(forcedCardId = null) {
     return { progressed: true, cardId: target.id, dept: dept.name, engine: activeEngine, durationMs, changedFiles, summary, stopHook };
   } finally {
     isTicking = false;
+    if (engineState.activeCardId !== null) {
+      engineState.activeCardId = null;
+      engineState.activeDeptName = null;
+      broadcastFullState();
+    }
   }
 }
 
@@ -530,11 +542,18 @@ function handleQaFailure(card, dept, activeEngine, round, reason, route, done, t
   return { progressed: true, rework: true, cardId: card.id };
 }
 
+function wakeFactoryForCard(cardId) {
+  engineState.listenerRunning = true;
+  setImmediate(() => {
+    tickListener(Number(cardId)).catch((e) => pushLog(`[ERROR] 자동 실행 오류: ${e.message}`));
+  });
+}
+
 setInterval(() => {
   if (engineState.listenerRunning) {
     tickListener().catch((e) => pushLog(`[ERROR] 리스너 오류: ${e.message}`));
   }
-}, 5000);
+}, 2000);
 
 // ---------------------------------------------------------------------------
 // 4. HTTP Server & REST + SSE API
@@ -706,7 +725,8 @@ const server = http.createServer(async (req, res) => {
         t
       );
 
-      pushLog(`[IDEA INTAKE] 회장님 새 아이디어 #${cardId} "${title}" 등록 (${route.length}개 부서 대기)`);
+      pushLog(`[IDEA INTAKE] 회장님 새 아이디어 #${cardId} "${title}" 등록 (${route.length}개 부서 즉시 착수)`);
+      wakeFactoryForCard(cardId);
       broadcastFullState();
       return sendJson(res, 201, { cardId, projectId, route });
     }
@@ -759,6 +779,7 @@ const server = http.createServer(async (req, res) => {
           `INSERT INTO history (card_id, round, dept_key, dept_name, engine, action, summary, details, commit_hash, harness_meta, created_at)
            VALUES (?, ?, 'ceo', '👤 회장님(Human Steering)', 'Human', 'STEER', ?, ?, ?, '{}', ?)`
         ).run(id, card.retry_count + 1, `회장님 수정 지시 → ${DEPT_MAP[targetDept].name}로 재투입`, body.comment || '직접 수정 지시', fakeHash(`str-${id}-${t}`), t);
+        wakeFactoryForCard(id);
       } else if (body.action === 'force_approve') {
         const nextIdx = Math.min(done.length + 1, route.length);
         const newDone = route.slice(0, nextIdx);
@@ -828,7 +849,8 @@ const server = http.createServer(async (req, res) => {
          VALUES (?, 1, 'cs', '🎧 14. 고객센터 & 피드백 루프', 'Codex', 'SPAWNED', ?, ?, ?, ?, ?)`
       ).run(childId, `원본 카드 #${id}의 유저 피드백으로부터 자동 파생됨`, `자동 배정 부서: ${childRoute.map((k) => DEPT_MAP[k].name).join(' → ')}`, fakeHash(`ch-${childId}-${t}`), JSON.stringify({ skillLoaded: '.harness/skills/cs.md' }), t);
 
-      pushLog(`[CS FEEDBACK LOOP] 카드 #${id} 유저 피드백 접수 → 개선 카드 #${childId} 자동 생성 (${DEPT_MAP[startDept].name} 착수)`);
+      pushLog(`[CS FEEDBACK LOOP] 카드 #${id} 유저 피드백 접수 → 개선 카드 #${childId} 자동 생성 (${DEPT_MAP[startDept].name} 즉시 착수)`);
+      wakeFactoryForCard(childId);
       broadcastFullState();
       return sendJson(res, 201, { childId, startDept });
     }
